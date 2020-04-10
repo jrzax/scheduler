@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import 'rbx/index.css';
 import { Button, Container, Title } from 'rbx';
+import firebase from 'firebase/app';
+import 'firebase/database';
 
 const Banner = ({ title }) => (
   <Title>{ title || '[loading...]'}</Title>
@@ -55,10 +57,23 @@ const buttonColor = selected => (
 const Course = ({ course, state }) => (
   <Button color ={ buttonColor(state.selected.includes(course)) }
     onClick = { () => state.toggle(course) }
+    onDoubleClick={ () => moveCourse(course) }
     disabled = {hasConflict(course,state.selected)}>
     { getCourseTerm(course) } CS { getCourseNumber(course) }: { course.title }
   </Button>
 );
+
+const moveCourse  = course => {
+  const meets = prompt('Enter new meeting data, in this format:', course.meets)
+  if (!meets) return;
+  const {days} = timeParts(meets);
+  if (days) saveCourse(course, meets);
+  else moveCourse(course);
+};
+
+const saveCourse = (course, meets) => {
+  db.child('courses').child(course.id).update({meets}).catch(error => alert(error));
+};
 
 const meetsPat = /^ *((?:M|Tu|W|Th|F)+) +(\d\d?):(\d\d) *[ -] *(\d\d?):(\d\d) *$/;
 
@@ -80,7 +95,7 @@ const addCourseTimes = course => ({
 
 const addScheduleTimes = schedule => ({
   title: schedule.title,
-  courses: schedule.courses.map(addCourseTimes)
+  courses: Object.values(schedule.courses).map(addCourseTimes)
 });
 
 const days = ['M', 'Tu', 'W', 'Th', 'F'];
@@ -109,17 +124,14 @@ const hasConflict = (course, selected) => (
 
 const App = () => {
   const [schedule, setSchedule] = useState({ title: '', courses: [] });
-  const url = 'https://courses.cs.northwestern.edu/394/data/cs-courses.php';
 
   useEffect(() => {
-    const fetchSchedule = async () => {
-      const response = await fetch(url);
-      if (!response.ok) throw response;
-      const json = await response.json();
-      setSchedule(addScheduleTimes(json));
+    const handleData = snap => {
+      if (snap.val()) setSchedule(addScheduleTimes(snap.val()));
     }
-    fetchSchedule();
-  }, [])
+    db.on('value', handleData, error => alert(error));
+    return () => { db.off('value', handleData); };
+  }, []);
 
   return (
     <Container>
@@ -128,5 +140,19 @@ const App = () => {
     </Container>
   );
 };
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB4oFj9fYFuXVtY6Q7l8ukViExO-ZoXd8w",
+  authDomain: "scheduler-bd460.firebaseapp.com",
+  databaseURL: "https://scheduler-bd460.firebaseio.com",
+  projectId: "scheduler-bd460",
+  storageBucket: "scheduler-bd460.appspot.com",
+  messagingSenderId: "28894335281",
+  appId: "1:28894335281:web:18c7c1d22aeb187559a010",
+  measurementId: "G-7XH5BKM1Y3"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database().ref();
 
 export default App;
